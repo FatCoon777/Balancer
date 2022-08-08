@@ -6,21 +6,21 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.springframework.stereotype.Component;
 import ru.Context;
-import ru.metric.MetricService;
+import ru.metric.MetricManager;
 
 @Aspect
 @Component
 public class CallBalancer {
-    private final MetricService metricService;
+    private final MetricManager metricManager;
 
-    public CallBalancer(MetricService metricService) {
-        this.metricService = metricService;
+    public CallBalancer(MetricManager metricManager) {
+        this.metricManager = metricManager;
     }
 
     @Before("@annotation(CallControl)")
     public void balance(JoinPoint joinPoint) throws CallLimitException {
         String meterName = getMeterName(joinPoint.getSignature());
-        metricService.check(meterName);
+        metricManager.check(meterName);
     }
 
     private String getMeterName(Signature signature) {

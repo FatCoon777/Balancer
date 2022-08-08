@@ -13,7 +13,7 @@ import ru.controllers.ApiTestController;
 import ru.controllers.RestTestController;
 import ru.controllers.TestController;
 
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 @SpringBootTest(classes = DemoApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -25,55 +25,71 @@ class BalancerTest {
     private final String apiUrl;
 
     private final int countPerTime;
+    private final long balancerTime;
 
     @Autowired
     BalancerTest(TestRestTemplate restTemplate,
                  ApiController apiController,
                  @Value("${api.url}") String apiUrl,
-                 @Value("${balancer.countPerTime}") int countPerTime) {
+                 @Value("${balancer.countPerTime}") int countPerTime,
+                 @Value("${balancer.time.minutes}") int balancerTime) {
         this.restTemplate = restTemplate;
         this.apiController = apiController;
         this.apiUrl = apiUrl;
         this.countPerTime = countPerTime;
+        this.balancerTime = TimeUnit.NANOSECONDS.convert(balancerTime, TimeUnit.MINUTES);
     }
 
     @Test
     void testStatuses() throws InterruptedException {
-
-        final int count = countPerTime + 15;
-        final CountDownLatch countDownLatch = new CountDownLatch(count);
-
+        final int requestCount = 20;
         TestController controller = new RestTestController(restTemplate, apiUrl);
-        TestMultiThreadManager manager = new TestMultiThreadManager();
+        TestMultiThreadManager manager = new TestMultiThreadManager(requestCount, controller);
 
-        manager.start(count, countDownLatch, controller);
-        countDownLatch.await();
+        long time = System.nanoTime();
+        manager.start();
+        manager.await();
+        time = System.nanoTime() - time;
+
+        double callTime = (double) balancerTime / countPerTime;
+        double intervalCount = Math.floor(time / callTime);
+        final double successCount = intervalCount == 0 ? 1 : intervalCount;
+        final double errorCount = requestCount - successCount;
 
         Assertions.assertAll(
-                () -> Assertions.assertEquals(manager.getSuccess(), countPerTime),
-                () -> Assertions.assertEquals(manager.getError(), count - countPerTime)
+                () -> Assertions.assertEquals(manager.getSuccess(), successCount),
+                () -> Assertions.assertEquals(manager.getError(), errorCount)
         );
     }
 
     @Test
     void testDifferentIp() throws InterruptedException {
-        int count = countPerTime + 15;
-        CountDownLatch countDownLatch = new CountDownLatch(count * 2);
+        final int requestCount = 20;
 
         TestController controller1 = new ApiTestController("111.111.111.111", apiController);
         TestController controller2 = new ApiTestController("222.222.222.222", apiController);
 
-        TestMultiThreadManager manager1 = new TestMultiThreadManager();
-        TestMultiThreadManager manager2 = new TestMultiThreadManager();
-        manager1.start(count, countDownLatch, controller1);
-        manager2.start(count, countDownLatch, controller2);
+        TestMultiThreadManager manager1 = new TestMultiThreadManager(requestCount, controller1);
+        TestMultiThreadManager manager2 = new TestMultiThreadManager(requestCount, controller2);
 
-        countDownLatch.await();
+        long time = System.nanoTime();
+        manager1.start();
+        manager2.start();
+
+        manager1.await();
+        manager2.await();
+        time = System.nanoTime() - time;
+
+        double callTime = (double) balancerTime / countPerTime;
+        double intervalCount = Math.floor(time / callTime);
+        final double successCount = intervalCount == 0 ? 1 : intervalCount;
+        final double errorCount = requestCount - successCount;
+
         Assertions.assertAll(
-                () -> Assertions.assertEquals(manager1.getSuccess(), countPerTime),
-                () -> Assertions.assertEquals(manager1.getError(), count - countPerTime),
-                () -> Assertions.assertEquals(manager2.getSuccess(), countPerTime),
-                () -> Assertions.assertEquals(manager2.getError(), count - countPerTime)
+                () -> Assertions.assertEquals(manager1.getSuccess(), successCount),
+                () -> Assertions.assertEquals(manager1.getError(), errorCount),
+                () -> Assertions.assertEquals(manager2.getSuccess(), successCount),
+                () -> Assertions.assertEquals(manager2.getError(), errorCount)
         );
     }
 }

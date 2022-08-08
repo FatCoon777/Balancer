@@ -2,34 +2,26 @@ package ru.metric;
 
 import ru.balancer.CallLimitException;
 
-import java.util.LinkedList;
-import java.util.Queue;
-
 public class Meter {
-    private final int countPerTime;
-    private final long time;
+    private final double callTime;
 
-    private final Queue<Long> queue = new LinkedList<>();
+    private volatile double lastTime = 0;
 
-    public Meter(int countPerTime, long time) {
-        this.countPerTime = countPerTime;
-        this.time = time;
+    public Meter(int countPerTime, long timeNanos) {
+        callTime = (double) timeNanos / countPerTime;
     }
 
-    public synchronized void increase() throws CallLimitException {
+    public void throttle() throws CallLimitException {
         long currentTime = System.nanoTime();
-        long thresholdTime = currentTime - time;
-        boolean isComplete = true;
-        while (isComplete) {
-            Long beforeTime = queue.peek();
-            if (beforeTime != null && beforeTime < thresholdTime) {
-                queue.poll();
-            } else {
-                isComplete = false;
+        if (currentTime > lastTime) {
+            synchronized (this) {
+                if (currentTime > lastTime) {
+                    lastTime = currentTime + callTime;
+                } else {
+                    throw new CallLimitException();
+                }
             }
-        }
-        queue.offer(currentTime);
-        if (queue.size() > countPerTime) {
+        } else {
             throw new CallLimitException();
         }
     }

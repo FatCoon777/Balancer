@@ -9,13 +9,13 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 @Service
-public class MetricService {
+public class MetricManager {
     private final int countPerTime;
     private final long time;
 
     private final ConcurrentMap<String, Meter> meterMap = new ConcurrentHashMap<>();
 
-    public MetricService(@Value("${balancer.countPerTime}") int countPerTime,
+    public MetricManager(@Value("${balancer.countPerTime}") int countPerTime,
                          @Value("${balancer.time.minutes}") int time) {
         this.countPerTime = countPerTime;
         this.time = TimeUnit.NANOSECONDS.convert(time, TimeUnit.MINUTES);
@@ -23,6 +23,6 @@ public class MetricService {
 
     public void check(String name) throws CallLimitException {
         Meter meter = meterMap.computeIfAbsent(name, key -> new Meter(countPerTime, time));
-        meter.increase();
+        meter.throttle();
     }
 }
