@@ -52,8 +52,7 @@ class BalancerTest {
         time = System.nanoTime() - time;
 
         double callTime = (double) balancerTime / countPerTime;
-        double intervalCount = Math.floor(time / callTime);
-        final double successCount = intervalCount == 0 ? 1 : intervalCount;
+        final double successCount = Math.ceil(time / callTime);
         final double errorCount = requestCount - successCount;
 
         Assertions.assertAll(
@@ -81,8 +80,7 @@ class BalancerTest {
         time = System.nanoTime() - time;
 
         double callTime = (double) balancerTime / countPerTime;
-        double intervalCount = Math.floor(time / callTime);
-        final double successCount = intervalCount == 0 ? 1 : intervalCount;
+        final double successCount = Math.ceil(time / callTime);
         final double errorCount = requestCount - successCount;
 
         Assertions.assertAll(
